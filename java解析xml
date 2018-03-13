@@ -1,0 +1,496 @@
+1 前期准备
+
+本文主要介绍利用dom4j来处理xml文件，所需依赖包为dom4j.jar。dom4j的优秀之处就不用再赘述了，它是久经考验过的，用对的工具处理对的事情是我们的目的：
+
+<!-- https://mvnrepository.com/artifact/dom4j/dom4j -->
+<dependency>
+     <groupId>dom4j</groupId>
+     <artifactId>dom4j</artifactId>
+     <version>1.6.1</version>
+</dependency>
+
+  
+
+    1.6.1版本是目前使用最广泛的版本，相关在线资料如下：
+
+    ①、中文API说明文档地址：
+
+    http://www.oschina.net/uploads/doc/dom4j-1.6.1/index.html
+
+    ②、使用示例说明，介绍常用用法：
+
+    http://dom4j.sourceforge.net/dom4j-1.6.1/guide.html
+
+对于版本不是很清楚的同学，可以通过两种方式来核实：
+
+    官网查看当前最新版本(http://www.dom4j.org/dom4j-1.6.1)，不过官网查找特别不方便，你都不知道版本更新列表在哪里，都怀疑这个是不是其官网。
+    Maven Repository线上库查看可用版本列表(http://mvnrepository.com/artifact/dom4j/dom4j)。
+
+2 读写操作
+
+本例中使用示例xml文件结构如下，该文件用以记录用户信息，包括姓名、密码、日期及用户的序号：
+
+<?xml version="1.0" encoding="UTF-8"?>
+<users>
+    <module id="1">
+        <user index="1">
+            <name>tom</name>
+            <password>12345</password>
+            <date>20150526</date>
+        </user>
+        <user index="2">
+            <name>jack</name>
+            <password>5%</password>
+            <date>20150526</date>
+        </user>
+        <user index="3">
+            <name>john</name>
+            <password>5%</password>
+            <date>20150526</date>
+        </user>
+    </module>
+</users>
+
+ 
+
+2.1 读操作
+
+首先来看读操作，下面结合代码来逐步说明整个过程。
+
+第一步：由于项目中文件分为jar包中及jar包外，就把读Document与获取元素列表List分开写了。
+
+public static Document readXmlDocument(String filePath){
+
+        InputStream in = null;
+        Document doc = null;
+
+        // 解析xml文档内容
+        try {
+            SAXReader reader = new SAXReader();
+            //in = XMLUtil.class.getClassLoader().getResourceAsStream(filePath);// 获取到xml文件
+            in = new FileInputStream(new File(filePath));
+            doc = reader.read(in);
+        } catch (Exception e) {
+            logger.error("XMLUtil.readXml error: "+ e);
+            return null;
+        } finally {
+            close(null,null,in);
+        }
+        return doc;
+    }
+
+
+
+第二步：接下来获取元素列表List。
+
+public static List<Element> readXml(String filePath){
+
+        InputStream in = null;
+        List<Element> elementList = null;
+        // 解析xml文档内容
+        try {
+            SAXReader reader = new SAXReader();
+            //in = XMLUtil.class.getClassLoader().getResourceAsStream(filePath);// 获取到xml文件
+            in = new FileInputStream(new File(filePath));
+            Document doc = reader.read(in);
+
+            Element root = doc.getRootElement();
+            elementList = root.elements();
+            logger.debug("XMLUtil.readXml root name:" + root.getName());
+        } catch (Exception e) {
+            logger.error("XMLUtil.readXml error: "+ e);
+            return null;
+        } finally {
+            close(null,null,in);
+        }
+        return elementList;
+    }
+
+ 
+
+第三步：在获取元素列表后，就开始进入元素对象分析了，示例文件中其实是一个包含二层节点的文件（不计根节点），第一层节点module，第二层节点user。
+
+public List<HashMap<String, String>> readUserDotXML(String path,String module_id) {
+
+        List<HashMap<String, String>> users = new ArrayList<HashMap<String, String>>();
+
+        String rootPath = PathUtil.getPath() + Constant.SYSTEM_FILE_PATH + path;
+
+        List<Element> list = XMLUtil.readXml(rootPath);
+        if (list != null) {
+            for (Element ele : list) {
+
+                String index = ele.attributeValue("id");
+
+                if (module_id.equals(index)) {
+
+                    List<Element> userList = ele.elements();
+
+                    if (userList != null && userList.size() > 0) {
+                        for (Element user : userList) {
+
+                            HashMap<String, String> hashMap = new HashMap<String, String>();
+
+                            Element name = user.element("name");
+                            Element password = user.element("password");
+
+                            String nameValue = name.getText();
+                            String passwordValue = password.getText();
+
+                            hashMap.put("name", nameValue);
+                            hashMap.put("password", passwordValue);
+
+                            users.add(hashMap);
+                        }
+                    }
+
+                    logger.debug("XMLFileServiceImpl.readUserDotXML Element module_id:" + module_id + ",users size:" + users.size());
+                    break;
+                }
+            }
+        }
+
+        return users;
+    }
+
+   
+
+以上方法是将user节点中的name、password属性值添加至List列表中，到目前为止读过程结束，如果你的xml结构不一样，添加相应的层次处理函数即可。
+
+这里写图片描述
+2.2 写操作
+
+介绍完读操作后，接下来介绍写操作，还是结合代码来逐步说明整个过程。
+
+第一步：创建xml文档，函数仅仅是创建了一个包含一级节点module的空文件。
+
+public boolean createUserDotXML(String path,String type) {
+
+        boolean writen = true;
+        OutputStream outputStream = null;
+        XMLWriter xmlWriter = null;
+        Document document = null;
+
+        String rootPath = PathUtil.getPath() + Constant.SYSTEM_FILE_PATH + path;
+
+        try {
+            document = DocumentHelper.createDocument();
+            Element new_root_node = DocumentHelper.createElement(type);
+            Element new_module_1_node = DocumentHelper.createElement("module");
+
+            new_module_1_node.addAttribute("id","1");          
+            new_root_node.add(new_module_1_node);
+            document.add(new_root_node);
+
+            OutputFormat outputFormat = new OutputFormat();
+            outputFormat.setEncoding("UTF-8");
+
+            outputStream = new FileOutputStream(rootPath);
+            xmlWriter = new XMLWriter(outputStream,outputFormat);
+
+            xmlWriter.write(document);
+
+        } catch (IOException e){
+            logger.error("ConfigFileServiceImpl.createServerDotXML error: "+ e);
+            return false;
+        } catch (Exception e){
+            logger.error("ConfigFileServiceImpl.createServerDotXML error: "+ e);
+            return false;
+        } finally {
+            XMLUtil.close(xmlWriter,outputStream,null);
+        }
+
+        return writen;
+    }
+
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+    10
+    11
+    12
+    13
+    14
+    15
+    16
+    17
+    18
+    19
+    20
+    21
+    22
+    23
+    24
+    25
+    26
+    27
+    28
+    29
+    30
+    31
+    32
+    33
+    34
+    35
+    36
+    37
+    38
+
+第二步：写入user节点，依旧利用上文中的readXmlDocument(String path)获取Document对象。本方法中加了一个“user对象重复判断”的方法，不需要可以删除。
+
+元素新增的次序：
+
+    1 创建user元素并添加属性元素。
+    2 将user元素添加至module节点中。
+
+public boolean writeUserDotXML(String path, String module_id, String userName, String passWord) {
+
+        boolean writen = true;
+        OutputStream outputStream = null;
+        XMLWriter xmlWriter = null;
+        Document document;
+
+        String rootPath = PathUtil.getPath() + Constant.SYSTEM_FILE_PATH + path;
+
+        try {
+            document = XMLUtil.readXmlDocument(rootPath);
+            if (document != null) {
+                Element root = document.getRootElement();
+                List<Element> elementList = root.elements();
+
+                for (Element ele : elementList) {
+
+                    String id = ele.attributeValue("id");
+                    if (id.equals(module_id)) {
+
+                        List<Element> userList = ele.elements();
+
+                        if (userList != null && userList.size() > 0) {
+
+                            // 进行比对，是否已存在数据
+                            for (Element user : userList) {
+
+                                Element name = user.element("name");
+                                String nameValue = name.getText();
+
+                                if (nameValue.equals(userName)) {
+                                    writen = false;
+                                    break;
+                                }
+                            }
+
+                            // 有需求才新增
+                            if (writen) {
+
+                                Element new_user_node = DocumentHelper.createElement("user");
+                                Element new_name_node = DocumentHelper.createElement("name");
+                                Element new_pass_node = DocumentHelper.createElement("password");
+                                Element new_date_node = DocumentHelper.createElement("date");
+
+                                new_name_node.setText(userName);
+                                new_pass_node.setText(passWord);
+                                new_date_node.setText(DateUtil.getCurrentDataString());
+                                new_user_node.addAttribute("index", userList.size() + 1 + "");
+
+                                new_user_node.add(new_name_node);
+                                new_user_node.add(new_pass_node);
+                                new_user_node.add(new_date_node);
+
+                                ele.add(new_user_node);
+                            }
+                        } else {
+
+                            Element new_user_node = DocumentHelper.createElement("user");
+                            Element new_name_node = DocumentHelper.createElement("name");
+                            Element new_pass_node = DocumentHelper.createElement("password");
+                            Element new_date_node = DocumentHelper.createElement("date");
+
+                            new_name_node.setText(userName);
+                            new_pass_node.setText(passWord);
+                            new_date_node.setText(DateUtil.getCurrentDataString());
+                            new_user_node.addAttribute("index", "1");
+
+                            new_user_node.add(new_name_node);
+                            new_user_node.add(new_pass_node);
+                            new_user_node.add(new_date_node);
+
+                            ele.add(new_user_node);
+                        }
+                        break;
+                    }
+                }
+            }
+
+            if (writen){
+                OutputFormat outputFormat = new OutputFormat();
+                outputFormat.setEncoding("UTF-8");
+
+                outputStream = new FileOutputStream(rootPath);
+                xmlWriter = new XMLWriter(outputStream,outputFormat);
+
+                xmlWriter.write(document);
+            }
+        } catch (IOException e){
+            logger.error("XMLFileServiceImpl.writeChangeDotXML error: "+ e);
+        } catch (Exception e){
+            logger.error("XMLFileServiceImpl.writeChangeDotXML error: "+ e);
+        } finally {
+            XMLUtil.close(xmlWriter,outputStream,null);
+        }
+
+        return writen;
+    }
+
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+    10
+    11
+    12
+    13
+    14
+    15
+    16
+    17
+    18
+    19
+    20
+    21
+    22
+    23
+    24
+    25
+    26
+    27
+    28
+    29
+    30
+    31
+    32
+    33
+    34
+    35
+    36
+    37
+    38
+    39
+    40
+    41
+    42
+    43
+    44
+    45
+    46
+    47
+    48
+    49
+    50
+    51
+    52
+    53
+    54
+    55
+    56
+    57
+    58
+    59
+    60
+    61
+    62
+    63
+    64
+    65
+    66
+    67
+    68
+    69
+    70
+    71
+    72
+    73
+    74
+    75
+    76
+    77
+    78
+    79
+    80
+    81
+    82
+    83
+    84
+    85
+    86
+    87
+    88
+    89
+    90
+    91
+    92
+    93
+    94
+    95
+    96
+    97
+
+写操作主要利用到了XMLWriter类，该类传入的参数为Document对象，因此只需要先读出Document对象，然后在此基础上新增或删除节点，利用如下方法即可完成xml写操作：
+
+OutputFormat outputFormat = new OutputFormat();
+outputFormat.setEncoding("UTF-8");
+
+outputStream = new FileOutputStream(rootPath);
+xmlWriter = new XMLWriter(outputStream,outputFormat);
+
+xmlWriter.write(document);
+
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+
+最后不要忘记关闭过程中的各类流对象:
+
+public static void close(XMLWriter xmlWriter, OutputStream outputStream,InputStream inputStream){
+
+        if (xmlWriter != null){
+            try{
+                xmlWriter.close();
+            } catch (IOException e) {
+                logger.error("XMLUtil.close error: "+ e);
+            }
+            xmlWriter = null;
+        }
+
+        if (outputStream != null){
+            try{
+                outputStream.close();
+            } catch (IOException e) {
+                logger.error("XMLUtil.close error: "+ e);
+            }
+            outputStream = null;
+        }
+
+        if (inputStream != null){
+            try{
+                inputStream.close();
+            } catch (IOException e) {
+                logger.error("XMLUtil.close error: "+ e);
+            }
+            inputStream = null;
+        }
+    }
